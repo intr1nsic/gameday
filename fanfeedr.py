@@ -44,12 +44,14 @@ def sync_schools(team=settings.FANFEEDR_TEAM):
             }
     
     for key, meta in teams.iteritems():
+        league, school = ''
         try:
             league = League.objects.get(league=meta['league'])
         except League.DoesNotExist:
             league = League(league=meta['league']).save()
         try:
-            University.objects.get(school_key=key)
+            school = University.objects.get(school_key=key)
+            school.leagues.add(league)
         except University.DoesNotExist:
             school = University(name=meta['school'], school_key=key)
             school.save()
