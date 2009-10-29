@@ -28,7 +28,7 @@ class University(models.Model):
 class League(models.Model):
     name = models.CharField(max_length=200, blank=True, null=True)
     league = models.CharField(max_length=200)
-    description = models.TextField()
+    description = models.TextField(blank=True, null=True)
     
     def __unicode__(self):
-        return self.name    
+        return self.league    

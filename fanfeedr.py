@@ -5,9 +5,12 @@ import simplejson
 from django.conf import settings
 from gameday.models import University, League
 
-def get_university():
+def sync_schools(team=settings.FANFEEDR_TEAM):
     """
-    Grabs the last played teams from the default school
+    From the default school listed in FANFEEDR_TEAM
+    grabs the latest games and checks to see if there is a school
+    in the database for the opposite team. If not, it will insert the
+    school and make all the league links for the school.
     """
     
     url = settings.FANFEEDR_SCORES_URL
@@ -15,31 +18,41 @@ def get_university():
     values = {
         'appid':    settings.FANFEEDR_API,
         'format':   'json',
-        'resource': settings.FANFEEDR_TEAM,
+        'resource': team,
         'start':    '0',
         'rows':     '25',
     }
     
     data = urllib.urlencode(values)
     result = simplejson.load(urllib.urlopen(url, data))
-    
-    current_schools = University.objects.all()
-    
+        
     teams = {}
     
     for game in result['docs']:
-        winteam = re.search(r'([^/]+)$', game['winteamlink']).group(1)
-        loseteam = re.search(r'([^/]+)$', game['winteamlink']).group(1)        
-
-        if not teams.has_key(winteam):
-           teams[winteam] = game['winteamname']
-        if not teams.has_key(loseteam):
-            teams[loseteam] = game['loseteamname']
+        winteam = re.search(r'(?P<league>[^/]+)/(?P<school>[^/]+)$', game['winteamlink'])
+        loseteam = re.search(r'(?P<league>[^/]+)/(?P<school>[^/]+)$', game['loseteamlink'])
+            
+        if not teams.has_key(winteam.groupdict()['school']):
+           teams[winteam.groupdict()['school']] = {
+                'school': game['winteamname'], 
+                'league': winteam.groupdict()['league']
+            }
+        if not teams.has_key(loseteam.groupdict()['school']):
+            teams[loseteam.groupdict()['school']] = {
+                'school': game['loseteamname'], 
+                'league': loseteam.groupdict()['league']
+            }
     
-    for key, name in teams.iteritems():
+    for key, meta in teams.iteritems():
+        try:
+            league = League.objects.get(league=meta['league'])
+        except League.DoesNotExist:
+            league = League(league=meta['league']).save()
         try:
             University.objects.get(school_key=key)
         except University.DoesNotExist:
-            University(name=name, school_key=key).save()
-    
+            school = University(name=meta['school'], school_key=key)
+            school.save()
+            school.leagues.add(league)
+
     return teams
